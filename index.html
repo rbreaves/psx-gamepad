@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Playstation Gamepad Conversion</title>
+<style>
+  body {
+    margin: 0;
+    padding: 4px 8px;
+    font-family: sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    background: #000;
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #datetime {
+    padding-right: 12px;
+    white-space: nowrap;
+    font-weight: bold;
+    cursor: pointer; /* clickable toggle */
+  }
+  #mapping {
+    flex: 1;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer; /* toggles overlay vs equals */
+  }
+  button {
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    margin: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Avatars */
+  .avatar {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    color: #fff;
+  }
+  .xbox-avatar { background: #107c10; border-radius: 50%; }
+  .nintendo-avatar { background: #e60012; border-radius: 4px; }
+  .sega-avatar {
+    background: #4169E1;
+    clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  }
+
+  /* Overlay mapping pair */
+  .mapping-pair {
+    position: relative;
+    display: inline-block;
+    font-size: 24px;
+    line-height: 1;
+    margin: 0 10px;
+    vertical-align: middle;
+  }
+  .mapping-pair .left { display: block; }
+  .mapping-pair .right {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
+    font-weight: 900;
+    text-shadow:
+      -1px -1px 0 #000,
+       1px -1px 0 #000,
+      -1px  1px 0 #000,
+       1px  1px 0 #000;
+  }
+  .mapping-pair .right.top-right { top: 0.15em; transform: translateX(-50%); }
+  .mapping-pair .right.bottom { top: auto; bottom: 0.10em; transform: translateX(-50%); }
+
+  /* Glyph styles */
+  .psx-x   { color: #4da6ff; font-weight: 900; text-shadow: 0 0 2px #4da6ff; }
+  .psx-o   { color: #ff4d4d; font-weight: 900; text-shadow: 0 0 2px #ff4d4d; }
+  .psx-sq  { color: #ff66cc; font-weight: 900; text-shadow: 0 0 2px #ff66cc; }
+  .psx-tri { color: #66ff66; font-weight: 900; text-shadow: 0 0 2px #66ff66; }
+  .psx-bumper { color: #4da6ff; }
+
+  /* ABXY colors */
+  .xbox-a { color: #66ff66; }
+  .xbox-b { color: #ff4d4d; }
+  .xbox-x { color: #4da6ff; }
+  .xbox-y { color: #ffcc00; }
+
+  .nintendo-a, .nintendo-b, .nintendo-x, .nintendo-y,
+  .sega-a, .sega-b, .sega-x, .sega-y, .sega-c, .sega-z { color: #fff; }
+</style>
+</head>
+<body>
+  <div id="datetime">—</div>
+  <div id="mapping">—</div>
+  <div>
+    <button id="cycleBtn"><span id="avatar" class="avatar xbox-avatar">X</span></button>
+  </div>
+
+<script>
+let overlayMode = true; // true = overlay, false = equals
+const targets = ["xbox", "nintendo", "sega"];
+let currentIndex = 0;
+
+// time display modes: 0 = short, 1 = full text, 2 = hidden, 3 = numeric
+let timeMode = 0;
+
+const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+const overlayConversions = {
+  xbox: [
+    '<span class="mapping-pair"><span class="psx-x left">✕</span><span class="xbox-a right">A</span></span>',
+    '<span class="mapping-pair"><span class="psx-o left">◯</span><span class="xbox-b right">B</span></span>',
+    '<span class="mapping-pair"><span class="psx-sq left">▢</span><span class="xbox-x right">X</span></span>',
+    '<span class="mapping-pair"><span class="psx-tri left">△</span><span class="xbox-y right bottom">Y</span></span>'
+  ],
+  nintendo: [
+    '<span class="mapping-pair"><span class="psx-x left">✕</span><span class="nintendo-b right">B</span></span>',
+    '<span class="mapping-pair"><span class="psx-o left">◯</span><span class="nintendo-a right">A</span></span>',
+    '<span class="mapping-pair"><span class="psx-sq left">▢</span><span class="nintendo-y right">Y</span></span>',
+    '<span class="mapping-pair"><span class="psx-tri left">△</span><span class="nintendo-x right bottom">X</span></span>'
+  ],
+  sega: [
+    '<span class="mapping-pair"><span class="psx-x left">✕</span><span class="sega-a right">A</span></span>',
+    '<span class="mapping-pair"><span class="psx-o left">◯</span><span class="sega-b right">B</span></span>',
+    '<span class="mapping-pair"><span class="psx-sq left">▢</span><span class="sega-x right">X</span></span>',
+    '<span class="mapping-pair"><span class="psx-tri left">△</span><span class="sega-y right bottom">Y</span></span>',
+    '<span class="mapping-pair"><span class="psx-bumper left">R1</span><span class="sega-c right top-right">C</span></span>',
+    '<span class="mapping-pair"><span class="psx-bumper left">L1</span><span class="sega-z right top-right">Z</span></span>'
+  ]
+};
+
+const equalsConversions = {
+  xbox: [
+    '<span class="psx-x">✕</span> = <span class="xbox-a">A</span>',
+    '<span class="psx-o">◯</span> = <span class="xbox-b">B</span>',
+    '<span class="psx-sq">▢</span> = <span class="xbox-x">X</span>',
+    '<span class="psx-tri">△</span> = <span class="xbox-y">Y</span>'
+  ],
+  nintendo: [
+    '<span class="psx-x">✕</span> = B',
+    '<span class="psx-o">◯</span> = A',
+    '<span class="psx-sq">▢</span> = Y',
+    '<span class="psx-tri">△</span> = X'
+  ],
+  sega: [
+    '<span class="psx-x">✕</span> = A',
+    '<span class="psx-o">◯</span> = B',
+    '<span class="psx-sq">▢</span> = X',
+    '<span class="psx-tri">△</span> = Y',
+    'R1= C',
+    'L1= Z'
+  ]
+};
+
+function render() {
+  const target = targets[currentIndex];
+  const set = overlayMode ? overlayConversions : equalsConversions;
+  let joiner = overlayMode ? "\u00A0\u00A0\u00A0" : "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
+  if (!overlayMode && target === "sega") joiner = "\u00A0\u00A0\u00A0";
+
+  document.getElementById("mapping").innerHTML = set[target].join(joiner);
+
+  const avatar = document.getElementById("avatar");
+  if (target === "xbox") { avatar.className = "avatar xbox-avatar"; avatar.textContent = "X"; }
+  if (target === "nintendo") { avatar.className = "avatar nintendo-avatar"; avatar.textContent = "N"; }
+  if (target === "sega") { avatar.className = "avatar sega-avatar"; avatar.textContent = "S"; }
+}
+
+document.getElementById("cycleBtn").addEventListener("click", () => {
+  currentIndex = (currentIndex + 1) % targets.length;
+  render();
+});
+
+// toggle between overlay and equals when clicking mapping area
+document.getElementById("mapping").addEventListener("click", () => {
+  overlayMode = !overlayMode;
+  render();
+});
+
+// cycle time display modes on click
+document.getElementById("datetime").addEventListener("click", () => {
+  timeMode = (timeMode + 1) % 4;
+  updateClock();
+});
+
+function updateClock() {
+  const now = new Date();
+  let hours = now.getHours();
+  const minutes = now.getMinutes().toString().padStart(2,"0");
+  const ampm = hours >= 12 ? "pm" : "am";
+  hours = hours % 12; if (hours === 0) hours = 12;
+
+  let str = "";
+  if (timeMode === 0) {
+    str = `${hours}:${minutes}${ampm}`;
+  } else if (timeMode === 1) {
+    str = `${days[now.getDay()]} ${months[now.getMonth()]} ${now.getDate()} ${hours}:${minutes}${ampm}`;
+  } else if (timeMode === 2) {
+    str = "—"; // dash instead of empty
+  } else if (timeMode === 3) {
+    const month = now.getMonth() + 1; // no leading zero
+    const day = now.getDate();        // no leading zero
+    str = `${month}/${day} ${hours}:${minutes}${ampm}`;
+  }
+
+  document.getElementById("datetime").textContent = str;
+}
+updateClock();
+setInterval(updateClock, 60000);
+
+render();
+</script>
+</body>
+</html>
