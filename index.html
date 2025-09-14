@@ -12,22 +12,33 @@
     font-weight: bold;
     background: #000;
     color: #fff;
-    display: flex;
-    justify-content: space-between;
+
+    display: grid;
+    grid-template-columns: auto 1fr auto; /* left | center | right */
     align-items: center;
+    column-gap: 16px;
   }
-  #datetime {
-    padding-right: 12px;
-    white-space: nowrap;
-    font-weight: bold;
-    cursor: pointer; /* clickable toggle */
+
+  #left   { display: flex; align-items: center; gap: 16px; }
+  #center { display: flex; justify-content: center; align-items: center; gap: 12px; }
+  #right  { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  #systemGroup { display: flex; flex-direction: row; gap: 6px; }
+
+  /* Left-justify mode collapses everything into the left zone */
+  .left-justify {
+    grid-template-columns: auto 1fr;
   }
-  #mapping {
-    flex: 1;
-    text-align: center;
-    white-space: nowrap;
-    cursor: pointer; /* toggles overlay vs equals */
+  .left-justify #center,
+  .left-justify #right {
+    display: none;
   }
+
+  #datetime { cursor: pointer; white-space: nowrap; }
+  #mapping { white-space: nowrap; cursor: pointer; }
+
+  .slot { display: inline-block; min-width: 60px; text-align: center; }
+  .slot.empty { opacity: 0.25; }
+
   button {
     background: none;
     border: none;
@@ -39,59 +50,33 @@
     display: flex;
     align-items: center;
   }
-
-  /* Avatars */
   .avatar {
-    width: 18px;
-    height: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: bold;
-    color: #fff;
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: bold; color: #fff;
   }
-  .xbox-avatar { background: #107c10; border-radius: 50%; }
+  .xbox-avatar     { background: #107c10; border-radius: 50%; }
   .nintendo-avatar { background: #e60012; border-radius: 4px; }
-  .sega-avatar {
-    background: #4169E1;
-    clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  .sega-avatar     { background: #4169E1;
+    clip-path: polygon(50% 0%,93% 25%,93% 75%,50% 100%,7% 75%,7% 25%);
   }
 
-  /* Overlay mapping pair */
-  .mapping-pair {
-    position: relative;
-    display: inline-block;
-    font-size: 24px;
-    line-height: 1;
-    margin: 0 10px;
-    vertical-align: middle;
-  }
+  .mapping-pair { position: relative; display: inline-block; font-size: 24px; line-height: 1; margin: 0 10px; vertical-align: middle; }
   .mapping-pair .left { display: block; }
   .mapping-pair .right {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 14px;
-    font-weight: 900;
-    text-shadow:
-      -1px -1px 0 #000,
-       1px -1px 0 #000,
-      -1px  1px 0 #000,
-       1px  1px 0 #000;
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 14px; font-weight: 900;
+    text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;
   }
   .mapping-pair .right.top-right { top: 0.15em; transform: translateX(-50%); }
-  .mapping-pair .right.bottom { top: auto; bottom: 0.10em; transform: translateX(-50%); }
+  .mapping-pair .right.bottom    { top: auto; bottom: 0.10em; transform: translateX(-50%); }
 
-  /* Glyph styles */
   .psx-x   { color: #4da6ff; font-weight: 900; text-shadow: 0 0 2px #4da6ff; }
   .psx-o   { color: #ff4d4d; font-weight: 900; text-shadow: 0 0 2px #ff4d4d; }
   .psx-sq  { color: #ff66cc; font-weight: 900; text-shadow: 0 0 2px #ff66cc; }
   .psx-tri { color: #66ff66; font-weight: 900; text-shadow: 0 0 2px #66ff66; }
   .psx-bumper { color: #4da6ff; }
 
-  /* ABXY colors */
   .xbox-a { color: #66ff66; }
   .xbox-b { color: #ff4d4d; }
   .xbox-x { color: #4da6ff; }
@@ -102,16 +87,24 @@
 </style>
 </head>
 <body>
-  <div id="datetime">—</div>
-  <div id="mapping">—</div>
-  <div>
-    <button id="cycleBtn"><span id="avatar" class="avatar xbox-avatar">X</span></button>
+  <div id="left">
+    <div id="datetime">—</div>
+  </div>
+  <div id="center">
+    <div id="mapping">—</div>
+  </div>
+  <div id="right">
+    <div id="systemGroup">
+      <button id="cycleBtn" title="Cycle system"><span id="avatar" class="avatar xbox-avatar">X</span></button>
+      <button id="layoutBtn" title="Toggle justify">⇔</button>
+    </div>
   </div>
 
 <script>
-let overlayMode = true; // true = overlay, false = equals
-const targets = ["xbox", "nintendo", "sega"];
+let overlayMode = true;
+const targets = ["xbox","nintendo","sega"];
 let currentIndex = 0;
+let leftMode = false;
 
 // time display modes: 0 = short, 1 = full text, 2 = hidden, 3 = numeric
 let timeMode = 0;
@@ -156,45 +149,47 @@ const equalsConversions = {
     '<span class="psx-tri">△</span> = X'
   ],
   sega: [
-    '<span class="psx-x">✕</span> = A',
-    '<span class="psx-o">◯</span> = B',
-    '<span class="psx-sq">▢</span> = X',
-    '<span class="psx-tri">△</span> = Y',
-    'R1= C',
-    'L1= Z'
+    '<span class="psx-x">✕</span> = <span class="sega-a">A</span>',
+    '<span class="psx-o">◯</span> = <span class="sega-b">B</span>',
+    '<span class="psx-sq">▢</span> = <span class="sega-x">X</span>',
+    '<span class="psx-tri">△</span> = <span class="sega-y">Y</span>',
+    '<span class="psx-bumper">R1</span>= <span class="sega-c">C</span>',
+    '<span class="psx-bumper">L1</span>= <span class="sega-z">Z</span>'
   ]
 };
 
-function render() {
+function render(){
   const target = targets[currentIndex];
   const set = overlayMode ? overlayConversions : equalsConversions;
-  let joiner = overlayMode ? "\u00A0\u00A0\u00A0" : "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0";
-  if (!overlayMode && target === "sega") joiner = "\u00A0\u00A0\u00A0";
+  let items = [...set[target]];
+  while(items.length < 6) items.push('<span class="slot empty"></span>');
+  items = items.map(item => `<span class="slot">${item}</span>`);
+  document.getElementById("mapping").innerHTML = items.join("");
 
-  document.getElementById("mapping").innerHTML = set[target].join(joiner);
+  const avatar=document.getElementById("avatar");
+  if(target==="xbox"){avatar.className="avatar xbox-avatar";avatar.textContent="X";}
+  else if(target==="nintendo"){avatar.className="avatar nintendo-avatar";avatar.textContent="N";}
+  else{avatar.className="avatar sega-avatar";avatar.textContent="S";}
 
-  const avatar = document.getElementById("avatar");
-  if (target === "xbox") { avatar.className = "avatar xbox-avatar"; avatar.textContent = "X"; }
-  if (target === "nintendo") { avatar.className = "avatar nintendo-avatar"; avatar.textContent = "N"; }
-  if (target === "sega") { avatar.className = "avatar sega-avatar"; avatar.textContent = "S"; }
+  document.body.classList.toggle("left-justify", leftMode);
+
+  // Move mapping + toggles when left-justified
+  if(leftMode){
+    const left = document.getElementById("left");
+    if(!document.getElementById("mapping").parentElement.isSameNode(left)){
+      left.appendChild(document.getElementById("mapping"));
+      left.appendChild(document.getElementById("systemGroup"));
+    }
+  } else {
+    document.getElementById("center").appendChild(document.getElementById("mapping"));
+    document.getElementById("right").appendChild(document.getElementById("systemGroup"));
+  }
 }
 
-document.getElementById("cycleBtn").addEventListener("click", () => {
-  currentIndex = (currentIndex + 1) % targets.length;
-  render();
-});
-
-// toggle between overlay and equals when clicking mapping area
-document.getElementById("mapping").addEventListener("click", () => {
-  overlayMode = !overlayMode;
-  render();
-});
-
-// cycle time display modes on click
-document.getElementById("datetime").addEventListener("click", () => {
-  timeMode = (timeMode + 1) % 4;
-  updateClock();
-});
+document.getElementById("cycleBtn").addEventListener("click",()=>{currentIndex=(currentIndex+1)%targets.length;render();});
+document.getElementById("layoutBtn").addEventListener("click",()=>{leftMode=!leftMode;render();});
+document.getElementById("mapping").addEventListener("click",()=>{overlayMode=!overlayMode;render();});
+document.getElementById("datetime").addEventListener("click",()=>{timeMode=(timeMode+1)%4;updateClock();});
 
 function updateClock() {
   const now = new Date();
