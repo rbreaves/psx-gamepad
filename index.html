@@ -24,14 +24,47 @@
   #right  { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
   #systemGroup { display: flex; flex-direction: row; gap: 6px; }
 
-  /* Left-justify mode collapses everything into the left zone */
+  /* Left-justify mode */
   .left-justify {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: 1fr; /* single column */
   }
   .left-justify #center,
   .left-justify #right {
+    display: contents; /* let JS move their children */
+  }
+
+  /* Vertical layout mode (rotation) */
+  .vertical {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    row-gap: 12px;
+    justify-items: start;   /* align left, not center */
+  }
+  .vertical #left,
+  .vertical #center,
+  .vertical #right {
+    justify-content: flex-start; /* align contents left */
+  }
+
+  /* hide justify toggle when vertical */
+  .vertical #layoutBtn {
     display: none;
   }
+
+  /* Stack mapping buttons vertically in vertical mode */
+  .vertical #mapping {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* keep them left justified */
+    gap: 6px;               /* spacing between buttons */
+  }
+  .vertical #mapping .slot {
+    display: block;
+    min-width: unset;       /* don’t force horizontal spacing */
+    text-align: left;
+  }
+
+
 
   #datetime { cursor: pointer; white-space: nowrap; }
   #mapping { white-space: nowrap; cursor: pointer; }
@@ -85,7 +118,9 @@
   .nintendo-a, .nintendo-b, .nintendo-x, .nintendo-y,
   .sega-a, .sega-b, .sega-x, .sega-y, .sega-c, .sega-z { color: #fff; }
 
-  @media (device-width: 853px) and (device-height: 533px) { /* target steamdeck only */
+  /* target steamdeck only */
+  /*
+  @media (device-width: 853px) and (device-height: 533px) {
     .psx-x { font-size: 26px !important; }
     .psx-o { font-size: 22px !important; position: relative; top: -3px; }
     .psx-sq { position: relative; top: -2px; }
@@ -94,19 +129,17 @@
     .xbox-a { position: relative; font-size: 11px !important;}
     .xbox-y { font-size: 12px !important; top: 52% !important;}
   }
+  */
 </style>
 </head>
 <body>
-  <div id="left">
-    <div id="datetime">—</div>
-  </div>
-  <div id="center">
-    <div id="mapping">—</div>
-  </div>
+  <div id="left"><div id="datetime">—</div></div>
+  <div id="center"><div id="mapping">—</div></div>
   <div id="right">
     <div id="systemGroup">
       <button id="cycleBtn" title="Cycle system"><span id="avatar" class="avatar xbox-avatar">X</span></button>
       <button id="layoutBtn" title="Toggle justify">⇔</button>
+      <button id="rotateBtn" title="Toggle orientation">↕</button>
     </div>
   </div>
 
@@ -115,12 +148,74 @@ let overlayMode = true;
 const targets = ["xbox","nintendo","sega"];
 let currentIndex = 0;
 let leftMode = false;
+let verticalMode = false;
 
-// time display modes: 0 = short, 1 = full text, 2 = hidden, 3 = numeric
-let timeMode = 0;
+function render(){
+  const target = targets[currentIndex];
+  const set = overlayMode ? overlayConversions : equalsConversions;
+  let items = [...set[target]];
+  while(items.length < 6) items.push('<span class="slot empty"></span>');
 
-const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  // reverse order in vertical mode
+  if (verticalMode) {
+    items.reverse();
+  }
+
+  items = items.map(item => `<span class="slot">${item}</span>`);
+  document.getElementById("mapping").innerHTML = items.join("");
+
+  const avatar=document.getElementById("avatar");
+  if(target==="xbox"){avatar.className="avatar xbox-avatar";avatar.textContent="X";}
+  else if(target==="nintendo"){avatar.className="avatar nintendo-avatar";avatar.textContent="N";}
+  else{avatar.className="avatar sega-avatar";avatar.textContent="S";}
+
+  // reset to default before applying modes
+  resetHorizontalLayout();
+
+  document.body.classList.toggle("left-justify", leftMode && !verticalMode);
+  document.body.classList.toggle("vertical", verticalMode);
+
+  if(leftMode && !verticalMode){
+    // move everything into the left container
+    const left = document.getElementById("left");
+    left.appendChild(document.getElementById("mapping"));
+    left.appendChild(document.getElementById("systemGroup"));
+  }
+}
+
+
+document.getElementById("cycleBtn").addEventListener("click",()=>{currentIndex=(currentIndex+1)%targets.length;render();});
+document.getElementById("layoutBtn").addEventListener("click",()=>{leftMode=!leftMode;render();});
+document.getElementById("rotateBtn").addEventListener("click",()=>{verticalMode=!verticalMode;render();});
+document.getElementById("mapping").addEventListener("click",()=>{overlayMode=!overlayMode;render();});
+document.getElementById("datetime").addEventListener("click",()=>{timeMode=(timeMode+1)%4;updateClock();});
+
+function resetHorizontalLayout() {
+  document.getElementById("left").appendChild(document.getElementById("datetime"));
+  document.getElementById("center").appendChild(document.getElementById("mapping"));
+  document.getElementById("right").appendChild(document.getElementById("systemGroup"));
+}
+
+
+const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+let timeMode=0;
+
+function updateClock(){
+  const now=new Date();
+  let hours=now.getHours();
+  const minutes=now.getMinutes().toString().padStart(2,"0");
+  const ampm=hours>=12?"pm":"am";
+  hours=hours%12;if(hours===0)hours=12;
+  let str="";
+  if(timeMode===0){str=`${hours}:${minutes}${ampm}`;}
+  else if(timeMode===1){str=`${days[now.getDay()]} ${months[now.getMonth()]} ${now.getDate()} ${hours}:${minutes}${ampm}`;}
+  else if(timeMode===2){str="—";}
+  else if(timeMode===3){const month=now.getMonth()+1;const day=now.getDate();str=`${month}/${day} ${hours}:${minutes}${ampm}`;}
+  document.getElementById("datetime").textContent=str;
+}
+setInterval(updateClock,60000);
+updateClock();
 
 const overlayConversions = {
   xbox: [
@@ -167,64 +262,6 @@ const equalsConversions = {
     '<span class="psx-bumper">L1</span>= <span class="sega-z">Z</span>'
   ]
 };
-
-function render(){
-  const target = targets[currentIndex];
-  const set = overlayMode ? overlayConversions : equalsConversions;
-  let items = [...set[target]];
-  while(items.length < 6) items.push('<span class="slot empty"></span>');
-  items = items.map(item => `<span class="slot">${item}</span>`);
-  document.getElementById("mapping").innerHTML = items.join("");
-
-  const avatar=document.getElementById("avatar");
-  if(target==="xbox"){avatar.className="avatar xbox-avatar";avatar.textContent="X";}
-  else if(target==="nintendo"){avatar.className="avatar nintendo-avatar";avatar.textContent="N";}
-  else{avatar.className="avatar sega-avatar";avatar.textContent="S";}
-
-  document.body.classList.toggle("left-justify", leftMode);
-
-  // Move mapping + toggles when left-justified
-  if(leftMode){
-    const left = document.getElementById("left");
-    if(!document.getElementById("mapping").parentElement.isSameNode(left)){
-      left.appendChild(document.getElementById("mapping"));
-      left.appendChild(document.getElementById("systemGroup"));
-    }
-  } else {
-    document.getElementById("center").appendChild(document.getElementById("mapping"));
-    document.getElementById("right").appendChild(document.getElementById("systemGroup"));
-  }
-}
-
-document.getElementById("cycleBtn").addEventListener("click",()=>{currentIndex=(currentIndex+1)%targets.length;render();});
-document.getElementById("layoutBtn").addEventListener("click",()=>{leftMode=!leftMode;render();});
-document.getElementById("mapping").addEventListener("click",()=>{overlayMode=!overlayMode;render();});
-document.getElementById("datetime").addEventListener("click",()=>{timeMode=(timeMode+1)%4;updateClock();});
-
-function updateClock() {
-  const now = new Date();
-  let hours = now.getHours();
-  const minutes = now.getMinutes().toString().padStart(2,"0");
-  const ampm = hours >= 12 ? "pm" : "am";
-  hours = hours % 12; if (hours === 0) hours = 12;
-
-  let str = "";
-  if (timeMode === 0) {
-    str = `${hours}:${minutes}${ampm}`;
-  } else if (timeMode === 1) {
-    str = `${days[now.getDay()]} ${months[now.getMonth()]} ${now.getDate()} ${hours}:${minutes}${ampm}`;
-  } else if (timeMode === 2) {
-    str = "—"; // dash instead of empty
-  } else if (timeMode === 3) {
-    const month = now.getMonth() + 1; // no leading zero
-    const day = now.getDate();        // no leading zero
-    str = `${month}/${day} ${hours}:${minutes}${ampm}`;
-  }
-
-  document.getElementById("datetime").textContent = str;
-}
-updateClock();
-setInterval(updateClock, 60000);
 
 render();
 </script>
