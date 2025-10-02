@@ -130,11 +130,64 @@
     .xbox-y { font-size: 12px !important; top: 52% !important;}
   }
   */
+
+  /* compact / hug-the-center mode */
+  body.align-center:not(.vertical) {
+    grid-template-columns: max-content max-content max-content; /* shrink columns */
+    justify-content: center;
+    column-gap: 4px; /* or whatever small gap you like */
+  }
+
+  /* keep the center cell a flex row so height stays consistent */
+  body.align-center:not(.vertical) #center {
+    display: flex;
+    justify-content: center;
+    align-items: center; /* keep baseline equal to left/right */
+    width: max-content;   /* but shrink to buttons width */
+  }
+
+  /* keep the premap row inline-flex but don't alter vertical alignment */
+  body.align-center:not(.vertical) #premap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  /* pull clock and toggles inward */
+  body.align-center:not(.vertical) #left  { justify-content: flex-end; }
+  body.align-center:not(.vertical) #right { justify-content: flex-start; }
+
+
+
+
+
+  #premap {
+    display: flex;
+    align-items: center;
+    gap: 8px;            /* space between buttons and margin toggle */
+  }
+
+  .vertical #premap {
+    flex-direction: column; /* stack margin button below mapping when vertical */
+    align-items: flex-start;
+  }
+
+  #marginBtn {
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+
+
 </style>
 </head>
 <body>
   <div id="left"><div id="datetime">—</div></div>
-  <div id="center"><div id="mapping">—</div></div>
+  <div id="center"><div id="premap"><div id="mapping">—</div><button id="marginBtn" title="Toggle margins">⧉</button></div></div>
   <div id="right">
     <div id="systemGroup">
       <button id="cycleBtn" title="Cycle system"><span id="avatar" class="avatar xbox-avatar">X</span></button>
@@ -149,44 +202,63 @@ const targets = ["xbox","nintendo","sega"];
 let currentIndex = 0;
 let leftMode = false;
 let verticalMode = false;
+let marginMode = false;
 
-function render(){
+function render() {
   const target = targets[currentIndex];
   const set = overlayMode ? overlayConversions : equalsConversions;
-  let items = [...set[target]];
-  while(items.length < 6) items.push('<span class="slot empty"></span>');
 
-  // reverse order in vertical mode
-  if (verticalMode) {
-    items.reverse();
-  }
+  // Build the real mapping items (preserve your .mapping-pair markup)
+  let realItems = [...set[target]];
 
-  items = items.map(item => `<span class="slot">${item}</span>`);
+  // Reverse only the real buttons in vertical mode (placeholders stay at the end)
+  if (verticalMode) realItems.reverse();
+
+  // Wrap each mapping in a fixed-width slot (restores your spacing)
+  let items = realItems.map(html => `<span class="slot">${html}</span>`);
+
+  // Pad up to 6 slots with faint placeholders
+  while (items.length < 6) items.push('<span class="slot empty"></span>');
+
+  // Inject into the DOM
   document.getElementById("mapping").innerHTML = items.join("");
 
-  const avatar=document.getElementById("avatar");
-  if(target==="xbox"){avatar.className="avatar xbox-avatar";avatar.textContent="X";}
-  else if(target==="nintendo"){avatar.className="avatar nintendo-avatar";avatar.textContent="N";}
-  else{avatar.className="avatar sega-avatar";avatar.textContent="S";}
+  // Update avatar
+  const avatar = document.getElementById("avatar");
+  avatar.className = "avatar " + (
+    target === "xbox" ? "xbox-avatar" :
+    target === "nintendo" ? "nintendo-avatar" : "sega-avatar"
+  );
+  avatar.textContent = (target === "xbox" ? "X" : target === "nintendo" ? "N" : "S");
 
-  // reset to default before applying modes
+  // Reset to default horizontal placement, then apply layout modes
   resetHorizontalLayout();
-
   document.body.classList.toggle("left-justify", leftMode && !verticalMode);
   document.body.classList.toggle("vertical", verticalMode);
+  document.body.classList.toggle("align-center", marginMode);
 
-  if(leftMode && !verticalMode){
-    // move everything into the left container
+  // If left-justify (and not vertical), move mapping + toggles into the left block
+  if (leftMode && !verticalMode) {
     const left = document.getElementById("left");
     left.appendChild(document.getElementById("mapping"));
     left.appendChild(document.getElementById("systemGroup"));
   }
+
+  // Hook up margin toggle (don’t let it trigger the mapping click-to-toggle overlay)
+  const mBtn = document.getElementById("marginBtn");
+  if (mBtn) {
+    mBtn.onclick = () => {
+      marginMode = !marginMode;
+      document.body.classList.toggle("align-center", marginMode);
+    };
+  }
 }
+
 
 
 document.getElementById("cycleBtn").addEventListener("click",()=>{currentIndex=(currentIndex+1)%targets.length;render();});
 document.getElementById("layoutBtn").addEventListener("click",()=>{leftMode=!leftMode;render();});
-document.getElementById("rotateBtn").addEventListener("click",()=>{verticalMode=!verticalMode;render();});
+document.getElementById("rotateBtn").addEventListener("click",()=>{verticalMode=!verticalMode;if(verticalMode)leftMode=false;render();});
 document.getElementById("mapping").addEventListener("click",()=>{overlayMode=!overlayMode;render();});
 document.getElementById("datetime").addEventListener("click",()=>{timeMode=(timeMode+1)%4;updateClock();});
 
@@ -196,11 +268,9 @@ function resetHorizontalLayout() {
   document.getElementById("right").appendChild(document.getElementById("systemGroup"));
 }
 
-
 const days=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 let timeMode=0;
-
 function updateClock(){
   const now=new Date();
   let hours=now.getHours();
@@ -214,8 +284,7 @@ function updateClock(){
   else if(timeMode===3){const month=now.getMonth()+1;const day=now.getDate();str=`${month}/${day} ${hours}:${minutes}${ampm}`;}
   document.getElementById("datetime").textContent=str;
 }
-setInterval(updateClock,60000);
-updateClock();
+setInterval(updateClock,60000);updateClock();
 
 const overlayConversions = {
   xbox: [
